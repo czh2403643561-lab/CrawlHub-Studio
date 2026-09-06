@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="CrawlHub Studio 本地商品数据工作台" />
-    <title>CrawlHub Studio</title>
+    <meta name="description" content="CrawlHub Studio 本地 TikTok 商品选品工作台" />
+    <title>商品数据 · CrawlHub Studio</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
@@ -19,63 +19,97 @@
 
       <div class="workspace">
         <aside class="sidebar" aria-label="主导航">
-          <p class="nav-title">工作台</p>
+          <p class="nav-title">商品工作台</p>
           <nav>
-            <a class="nav-item active" href="/">概览</a>
-            <a class="nav-item" href="#product-preview">商品数据</a>
+            <a class="nav-item active" href="#product-list">商品数据</a>
             <span class="nav-item muted">收藏商品</span>
+            <span class="nav-item muted">数据分析</span>
             <span class="nav-item muted">设置</span>
           </nav>
-          <p class="sidebar-note">为商品导入、筛选和管理模块预留。</p>
+          <p class="sidebar-note">商品列表是当前选品工作的核心区域。</p>
         </aside>
 
         <main class="main-content">
-          <section class="hero">
-            <p class="eyebrow">CrawlHub Studio</p>
-            <h1>你的 TikTok 商品选品工作台</h1>
-            <p>先从清晰整理商品数据开始，后续可继续接入导入、筛选和个人标记。</p>
-          </section>
-
-          <section class="overview-grid" aria-label="工作台概览">
-            <article class="stat-card">
-              <span>当前商品</span>
-              <strong id="product-count">0</strong>
-              <small id="product-count-note">用于验证商品数据结构</small>
-            </article>
-            <article class="stat-card">
-              <span>数据导入</span>
-              <strong>JSON</strong>
-              <small>支持导入采集商品数据</small>
-            </article>
-            <article class="stat-card">
-              <span>个人标记</span>
-              <strong>待接入</strong>
-              <small>后续支持收藏与状态</small>
-            </article>
-          </section>
-
-          <section class="import-section" aria-labelledby="import-title">
+          <section class="page-header">
             <div>
-              <p class="eyebrow">数据导入</p>
-              <h2 id="import-title">导入商品数据</h2>
-              <p>选择采集工具导出的 JSON 商品文件。导入后会保存到当前电脑。</p>
+              <p class="breadcrumb">商品数据 / TikTok 热卖商品榜</p>
+              <h1>商品数据</h1>
+              <p class="page-description">集中浏览商品封面、榜单表现和店铺信息。</p>
             </div>
-            <div class="import-actions">
-              <input id="import-file" type="file" accept="application/json,.json" />
-              <button id="import-button" type="button">导入并保存</button>
+            <div class="page-meta">
+              <strong id="product-count">0 条商品</strong>
+              <span class="preview-label" id="product-source">模拟数据</span>
+            </div>
+          </section>
+
+          <section class="toolbar" aria-label="商品数据工具栏">
+            <div class="toolbar-top">
+              <div class="dataset-info">
+                <span class="dataset-dot"></span>
+                <div>
+                  <strong>TikTok 热卖商品榜</strong>
+                  <small id="product-count-note">正在读取本地数据</small>
+                </div>
+              </div>
+              <div class="import-actions">
+                <label class="file-picker">
+                  选择 JSON
+                  <input id="import-file" type="file" accept="application/json,.json" />
+                </label>
+                <button id="import-button" type="button">导入并保存</button>
+              </div>
+            </div>
+            <div class="toolbar-bottom">
+              <label class="search-control">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="搜索商品（预留）" disabled />
+              </label>
+              <button class="toolbar-button" type="button" disabled>筛选</button>
+              <button class="toolbar-button" type="button" disabled>排序</button>
+              <span class="toolbar-hint">筛选和排序功能后续接入</span>
             </div>
             <p class="import-feedback" id="import-feedback" role="status">尚未导入商品数据。</p>
           </section>
 
-          <section class="product-section" id="product-preview">
-            <div class="section-heading">
+          <section class="table-section" id="product-list" aria-labelledby="product-list-title">
+            <div class="table-heading">
               <div>
-                <p class="eyebrow">商品数据模块</p>
-                <h2>商品预览</h2>
+                <p class="eyebrow">商品榜单</p>
+                <h2 id="product-list-title">TikTok 热卖商品</h2>
               </div>
-              <span class="preview-label" id="product-source">模拟数据</span>
+              <span class="table-count" id="table-count">0 条</span>
             </div>
-            <div class="product-grid" id="product-grid"></div>
+            <table class="product-table">
+              <colgroup>
+                <col class="col-rank" />
+                <col class="col-change" />
+                <col class="col-product" />
+                <col class="col-price" />
+                <col class="col-gmv" />
+                <col class="col-clicks" />
+                <col class="col-ctr" />
+                <col class="col-rating" />
+                <col class="col-shop" />
+                <col class="col-similar" />
+                <col class="col-actions" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col">排名</th>
+                  <th scope="col">变化</th>
+                  <th scope="col" class="text-left">商品</th>
+                  <th scope="col">价格</th>
+                  <th scope="col">GMV</th>
+                  <th scope="col">点击量</th>
+                  <th scope="col">CTR</th>
+                  <th scope="col">评分</th>
+                  <th scope="col">店铺</th>
+                  <th scope="col">相似商品</th>
+                  <th scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody id="product-table-body"></tbody>
+            </table>
           </section>
         </main>
       </div>

@@ -1,39 +1,86 @@
 import { mockProducts } from "../modules/products/mock-products.js";
 
-const productGrid = document.querySelector("#product-grid");
+const tableBody = document.querySelector("#product-table-body");
 const productCount = document.querySelector("#product-count");
 const productCountNote = document.querySelector("#product-count-note");
+const tableCount = document.querySelector("#table-count");
 const productSource = document.querySelector("#product-source");
 const importFile = document.querySelector("#import-file");
 const importButton = document.querySelector("#import-button");
 const importFeedback = document.querySelector("#import-feedback");
 
-let displayedProducts = mockProducts;
-
 function renderProducts(products, sourceLabel) {
-  displayedProducts = products;
-  productCount.textContent = products.length;
-  productCountNote.textContent = sourceLabel === "已保存数据" ? "已保存到当前电脑" : "用于验证商品数据结构";
+  productCount.textContent = `${products.length} 条商品`;
+  tableCount.textContent = `${products.length} 条`;
+  productCountNote.textContent = sourceLabel === "已保存数据" ? "已保存到当前电脑" : "使用模拟数据验证页面";
   productSource.textContent = sourceLabel;
 
-  productGrid.innerHTML = products
-  .map(
-    (product) => `
-      <article class="product-card">
-        <div class="product-image" aria-hidden="true">${escapeHtml(product.imageLabel)}</div>
-        <div class="product-info">
-          <span class="rank">排名 #${product.rank}</span>
-          <h3>${escapeHtml(product.name)}</h3>
-          <p>${escapeHtml(product.shopName)}</p>
-          <div class="product-metrics">
-            <span>价格 <strong>${escapeHtml(product.priceText || `$${product.price.toFixed(2)}`)}</strong></span>
-            <span>GMV <strong>${escapeHtml(product.gmvText || `$${formatNumber(product.gmv)}`)}</strong></span>
-            <span>CTR <strong>${escapeHtml(product.ctrText || `${product.ctr}%`)}</strong></span>
-          </div>
+  tableBody.innerHTML = products.map(renderProductRow).join("");
+  tableBody.querySelectorAll(".product-thumb").forEach((image) => {
+    image.addEventListener("error", () => {
+      image.hidden = true;
+      image.nextElementSibling.hidden = false;
+    });
+  });
+}
+
+function renderProductRow(product) {
+  const imageMarkup = product.imageUrl
+    ? `<img class="product-thumb" src="${escapeHtml(product.imageUrl)}" alt="" loading="lazy" />`
+    : "";
+
+  return `
+    <tr>
+      <td class="rank-cell">${formatRank(product.rank)}</td>
+      <td class="change-cell">${formatRankChange(product.rankChange)}</td>
+      <td class="product-cell">
+        <div class="thumb-wrap">
+          ${imageMarkup}
+          <span class="thumb-fallback" ${product.imageUrl ? "hidden" : ""}>${escapeHtml(product.imageLabel)}</span>
         </div>
-      </article>`
-  )
-  .join("");
+        <div class="product-copy">
+          <strong class="product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
+          <span class="product-rating-note">评分 ${formatRating(product.rating)}</span>
+        </div>
+      </td>
+      <td class="metric-cell">${escapeHtml(product.priceText || formatNumber(product.price))}</td>
+      <td class="metric-cell">${escapeHtml(product.gmvText || formatNumber(product.gmv))}</td>
+      <td class="metric-cell">${escapeHtml(product.clicksText || formatNumber(product.clicks))}</td>
+      <td class="metric-cell">${escapeHtml(product.ctrText || `${product.ctr}%`)}</td>
+      <td class="rating-cell">${formatRating(product.rating)}</td>
+      <td class="shop-cell" title="${escapeHtml(product.shopName)}">${escapeHtml(product.shopName)}</td>
+      <td class="similar-cell">${formatNumber(product.similarProducts)}</td>
+      <td class="action-cell">
+        <button class="table-action" type="button" disabled title="商品详情功能待接入">查看</button>
+        <button class="table-action secondary" type="button" disabled title="收藏功能待接入">收藏</button>
+      </td>
+    </tr>`;
+}
+
+function formatRank(value) {
+  const rank = Number(value);
+  if (rank === 1) return "♛ 1";
+  if (rank === 2) return "♛ 2";
+  if (rank === 3) return "♛ 3";
+  return Number.isFinite(rank) ? String(rank) : "-";
+}
+
+function formatRankChange(value) {
+  const change = Number(value);
+  if (!Number.isFinite(change) || change === 0) return '<span class="change-flat">—</span>';
+  const direction = change > 0 ? "up" : "down";
+  const symbol = change > 0 ? "↑" : "↓";
+  return `<span class="change-${direction}">${symbol} ${formatNumber(Math.abs(change))}</span>`;
+}
+
+function formatRating(value) {
+  const rating = Number(value);
+  return Number.isFinite(rating) && rating > 0 ? `${rating.toFixed(1)}/5` : "-";
+}
+
+function formatNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number) : "-";
 }
 
 async function loadStoredProducts() {
@@ -92,10 +139,6 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
 loadStoredProducts();
