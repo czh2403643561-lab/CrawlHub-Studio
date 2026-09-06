@@ -1,4 +1,3 @@
-/** @type {import("./product.js").Product[]} */
 export const mockProducts = [
   {
     id: "product-001",
@@ -6,9 +5,13 @@ export const mockProducts = [
     imageUrl: "",
     imageLabel: "BLEND",
     price: 24.99,
+    priceText: "$24.99",
     gmv: 12840,
+    gmvText: "$12,840",
     clicks: 3920,
+    clicksText: "3,920",
     ctr: 6.8,
+    ctrText: "6.8%",
     rating: 4.8,
     shopName: "Daily Home Store",
     rank: 1
@@ -19,9 +22,13 @@ export const mockProducts = [
     imageUrl: "",
     imageLabel: "PET",
     price: 12.5,
+    priceText: "$12.50",
     gmv: 8640,
+    gmvText: "$8,640",
     clicks: 3180,
+    clicksText: "3,180",
     ctr: 5.4,
+    ctrText: "5.4%",
     rating: 4.7,
     shopName: "Paw Basics",
     rank: 2
@@ -32,9 +39,13 @@ export const mockProducts = [
     imageUrl: "",
     imageLabel: "COOL",
     price: 18.9,
+    priceText: "$18.90",
     gmv: 6210,
+    gmvText: "$6,210",
     clicks: 2050,
+    clicksText: "2,050",
     ctr: 4.9,
+    ctrText: "4.9%",
     rating: 4.6,
     shopName: "Self Care Lab",
     rank: 3

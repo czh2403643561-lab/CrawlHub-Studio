@@ -38,14 +38,14 @@
 
           <section class="overview-grid" aria-label="工作台概览">
             <article class="stat-card">
-              <span>模拟商品</span>
+              <span>当前商品</span>
               <strong id="product-count">0</strong>
-              <small>用于验证商品数据结构</small>
+              <small id="product-count-note">用于验证商品数据结构</small>
             </article>
             <article class="stat-card">
               <span>数据导入</span>
-              <strong>待接入</strong>
-              <small>下一步可导入采集文件</small>
+              <strong>JSON</strong>
+              <small>支持导入采集商品数据</small>
             </article>
             <article class="stat-card">
               <span>个人标记</span>
@@ -54,13 +54,26 @@
             </article>
           </section>
 
+          <section class="import-section" aria-labelledby="import-title">
+            <div>
+              <p class="eyebrow">数据导入</p>
+              <h2 id="import-title">导入商品数据</h2>
+              <p>选择采集工具导出的 JSON 商品文件。导入后会保存到当前电脑。</p>
+            </div>
+            <div class="import-actions">
+              <input id="import-file" type="file" accept="application/json,.json" />
+              <button id="import-button" type="button">导入并保存</button>
+            </div>
+            <p class="import-feedback" id="import-feedback" role="status">尚未导入商品数据。</p>
+          </section>
+
           <section class="product-section" id="product-preview">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">商品数据模块</p>
                 <h2>商品预览</h2>
               </div>
-              <span class="preview-label">模拟数据</span>
+              <span class="preview-label" id="product-source">模拟数据</span>
             </div>
             <div class="product-grid" id="product-grid"></div>
           </section>

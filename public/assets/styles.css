@@ -46,6 +46,16 @@ h1 { font-size: clamp(31px, 4vw, 46px); letter-spacing: -.045em; line-height: 1.
 .stat-card span, .stat-card small { color: #7b8697; font-size: 13px; }
 .stat-card strong { color: #222b38; font-size: 25px; letter-spacing: -.03em; }
 
+.import-section { align-items: center; background: #ffffff; border: 1px solid #e8ebf1; border-radius: 14px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 28px; padding: 24px; }
+.import-section .eyebrow { margin-bottom: 7px; }
+.import-section h2 { margin-bottom: 8px; }
+.import-section > div:first-child > p:last-child, .import-feedback { color: #7b8697; font-size: 13px; line-height: 1.6; margin-bottom: 0; }
+.import-actions { align-items: center; display: flex; gap: 10px; }
+.import-actions input { color: #687486; font-size: 12px; max-width: 225px; }
+.import-actions button { background: #2437d3; border: 0; border-radius: 8px; color: #ffffff; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 11px 15px; white-space: nowrap; }
+.import-actions button:disabled { cursor: wait; opacity: .65; }
+.import-feedback { grid-column: 1 / -1; }
+
 .product-section { margin-top: 48px; }
 .section-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 18px; }
 .section-heading .eyebrow { margin-bottom: 7px; }
@@ -71,4 +81,6 @@ h3 { font-size: 15px; line-height: 1.4; margin: 8px 0 4px; }
   .nav-item { white-space: nowrap; }
   .main-content { padding: 36px 20px; }
   .overview-grid, .product-grid { grid-template-columns: 1fr; }
+  .import-section { align-items: start; grid-template-columns: 1fr; }
+  .import-actions { align-items: start; flex-direction: column; }
 }
