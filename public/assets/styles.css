@@ -122,6 +122,13 @@ h1 { font-size: 30px; letter-spacing: -.04em; line-height: 1.15; margin-bottom: 
 .search-control input::placeholder { color: #9ca5b2; }
 .toolbar-button { background: #ffffff; border: 1px solid #dfe4eb; color: #8b95a3; cursor: default; }
 .toolbar-hint { color: #a0a9b5; font-size: 11px; margin-left: 3px; }
+.import-file-info { align-items: baseline; display: flex; gap: 8px; margin-top: 10px; min-height: 17px; }
+.import-file-info strong { color: #4c5868; font-size: 11px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-file-info span { color: #9aa3af; font-size: 10px; }
+.import-validation { font-size: 11px; line-height: 1.4; margin: 5px 0 0; }
+.import-validation.neutral { color: #8b95a3; }
+.import-validation.success { color: #1b9159; }
+.import-validation.error { color: #d84d5a; }
 .import-feedback { color: #7b8697; font-size: 11px; line-height: 1.4; margin: 9px 0 0; }
 .table-section { margin-top: 18px; overflow: hidden; }
 .table-heading { align-items: end; display: flex; justify-content: space-between; padding: 18px 18px 13px; }

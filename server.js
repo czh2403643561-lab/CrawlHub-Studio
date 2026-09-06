@@ -25,9 +25,13 @@ async function getStoredProducts() {
   try {
     const content = await readFile(productsFile, "utf8");
     const storedData = JSON.parse(content);
+    const defaultRankType = storedData.rank_type ?? "总榜";
+    const products = Array.isArray(storedData.products)
+      ? storedData.products.map((product, index) => normalizeProduct(product, index, defaultRankType))
+      : [];
     return {
       importedAt: storedData.importedAt ?? null,
-      products: Array.isArray(storedData.products) ? storedData.products : [],
+      products,
       sourceFile: storedData.sourceFile ?? null
     };
   } catch (error) {
@@ -68,6 +72,7 @@ async function saveProducts(products, sourceFile) {
     version: 1,
     importedAt: new Date().toISOString(),
     products,
+    rank_type: products[0]?.rank_type ?? "总榜",
     sourceFile: typeof sourceFile === "string" ? sourceFile : null
   };
 
@@ -90,9 +95,17 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && requestedPath === "/api/products/import") {
       const payload = await readJsonBody(request);
       const rawProducts = getProductRecords(payload.products ?? payload);
+      const defaultRankType = payload.rank_type
+        ?? payload.rankType
+        ?? payload.metadata?.rank_type
+        ?? "总榜";
+      const invalidCount = rawProducts.filter((product) => !isProductRecord(product)).length;
+      if (invalidCount > 0) {
+        throw new Error(`${invalidCount} 条记录缺少商品名称`);
+      }
+
       const products = rawProducts
-        .filter((product) => product && typeof product === "object")
-        .map((product, index) => normalizeProduct(product, index));
+        .map((product, index) => normalizeProduct(product, index, defaultRankType));
 
       if (products.length === 0) {
         throw new Error("没有可导入的商品数据");
@@ -103,6 +116,7 @@ const server = createServer(async (request, response) => {
         importedAt: storedData.importedAt,
         importedCount: products.length,
         products,
+        rank_type: storedData.rank_type,
         sourceFile: storedData.sourceFile
       });
       return;
@@ -141,6 +155,10 @@ const server = createServer(async (request, response) => {
     response.end("Not found");
   }
 });
+
+function isProductRecord(record) {
+  return Boolean(record && typeof record === "object" && (record.product_name || record.name));
+}
 
 server.listen(port, () => {
   console.log(`CrawlHub Studio is running at http://localhost:${port}`);

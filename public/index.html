@@ -56,9 +56,14 @@
                   选择 JSON
                   <input id="import-file" type="file" accept="application/json,.json" />
                 </label>
-                <button id="import-button" type="button">导入并保存</button>
+                <button id="import-button" type="button" disabled>导入并保存</button>
               </div>
             </div>
+            <div class="import-file-info" aria-live="polite">
+              <strong id="import-file-name">尚未选择文件</strong>
+              <span id="import-file-size"></span>
+            </div>
+            <p class="import-validation neutral" id="import-validation" role="status">选择文件后将进行 JSON 格式和商品数据校验。</p>
             <div class="toolbar-bottom">
               <label class="search-control">
                 <span aria-hidden="true">⌕</span>

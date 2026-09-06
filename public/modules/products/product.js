@@ -18,6 +18,8 @@
  * @property {number} rating 商品评分
  * @property {string} shopName 店铺名称
  * @property {number} rank 商品排名
+ * @property {number} rankChange 排名变化
+ * @property {string} rank_type 榜单类型
  */
 
 export const productFields = [
@@ -30,14 +32,15 @@ export const productFields = [
   "ctr",
   "rating",
   "shopName",
-  "rank"
+  "rank",
+  "rank_type"
 ];
 
 /**
  * 将采集记录转换为工作台使用的商品结构。
  * 同时支持采集字段和未来可能传入的标准字段。
  */
-export function normalizeProduct(source, index = 0) {
+export function normalizeProduct(source, index = 0, defaultRankType = "总榜") {
   const name = asText(source.product_name ?? source.name, `未命名商品 ${index + 1}`);
   const priceText = asText(source.priceText ?? source.price);
   const gmvText = asText(source.gmvText ?? source.gmv);
@@ -62,7 +65,8 @@ export function normalizeProduct(source, index = 0) {
     shopName: asText(source.shopName ?? source.shop, "未提供店铺"),
     rank,
     rankChange: asNumber(source.rankChange ?? source.rank_change, 0),
-    similarProducts: asNumber(source.similarProducts ?? source.similar_products, 0)
+    similarProducts: asNumber(source.similarProducts ?? source.similar_products, 0),
+    rank_type: asText(source.rank_type ?? source.rankType, defaultRankType)
   };
 }
 
