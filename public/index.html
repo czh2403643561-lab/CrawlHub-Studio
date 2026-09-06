@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="CrawlHub Studio 本地商品数据工作台" />
+    <title>CrawlHub Studio</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="CrawlHub Studio 首页">
+          <span class="brand-mark">C</span>
+          <span>CrawlHub Studio</span>
+        </a>
+        <div class="local-badge"><span></span>本地工作台</div>
+      </header>
+
+      <div class="workspace">
+        <aside class="sidebar" aria-label="主导航">
+          <p class="nav-title">工作台</p>
+          <nav>
+            <a class="nav-item active" href="/">概览</a>
+            <a class="nav-item" href="#product-preview">商品数据</a>
+            <span class="nav-item muted">收藏商品</span>
+            <span class="nav-item muted">设置</span>
+          </nav>
+          <p class="sidebar-note">为商品导入、筛选和管理模块预留。</p>
+        </aside>
+
+        <main class="main-content">
+          <section class="hero">
+            <p class="eyebrow">CrawlHub Studio</p>
+            <h1>你的 TikTok 商品选品工作台</h1>
+            <p>先从清晰整理商品数据开始，后续可继续接入导入、筛选和个人标记。</p>
+          </section>
+
+          <section class="overview-grid" aria-label="工作台概览">
+            <article class="stat-card">
+              <span>模拟商品</span>
+              <strong id="product-count">0</strong>
+              <small>用于验证商品数据结构</small>
+            </article>
+            <article class="stat-card">
+              <span>数据导入</span>
+              <strong>待接入</strong>
+              <small>下一步可导入采集文件</small>
+            </article>
+            <article class="stat-card">
+              <span>个人标记</span>
+              <strong>待接入</strong>
+              <small>后续支持收藏与状态</small>
+            </article>
+          </section>
+
+          <section class="product-section" id="product-preview">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">商品数据模块</p>
+                <h2>商品预览</h2>
+              </div>
+              <span class="preview-label">模拟数据</span>
+            </div>
+            <div class="product-grid" id="product-grid"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
