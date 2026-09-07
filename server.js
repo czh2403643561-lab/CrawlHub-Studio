@@ -2,10 +2,13 @@ import { createServer } from "node:http";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, relative, resolve } from "node:path";
 import {
+  RANK_TYPES,
   createProductIdentity,
   normalizeProduct,
   normalizeRankType,
-  selectPrimaryRanking
+  rankTypeLabel,
+  selectPrimaryRankRecord,
+  toLegacyProductView
 } from "./public/modules/products/product.js";
 
 const port = Number(process.env.PORT) || 4173;
@@ -27,20 +30,39 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
-async function getStoredProducts() {
+async function loadStore() {
   try {
     const storedData = JSON.parse(await readFile(productsFile, "utf8"));
+    const defaultRankType = storedData.rankType ?? storedData.rank_type ?? "overall";
     const products = Array.isArray(storedData.products)
-      ? storedData.products.map((product, index) => normalizeProduct(product, index, storedData.rank_type ?? "总榜", {
+      ? storedData.products.map((product, index) => normalizeProduct(product, index, defaultRankType, {
         sourceFile: storedData.sourceFile,
         importedAt: storedData.importedAt
       }))
       : [];
-    return { importedAt: storedData.importedAt ?? null, products, sourceFiles: storedData.sourceFiles ?? [] };
+    return {
+      importedAt: storedData.importedAt ?? null,
+      products,
+      sourceFiles: Array.isArray(storedData.sourceFiles) ? storedData.sourceFiles : []
+    };
   } catch (error) {
     if (error.code === "ENOENT") return { importedAt: null, products: [], sourceFiles: [] };
     throw error;
   }
+}
+
+function buildProductResponse(store, extra = {}) {
+  const rankTypes = [...new Set(store.products.flatMap((product) => product.rankRecords.map((record) => record.rankType)))];
+  return {
+    importedAt: store.importedAt,
+    products: store.products.map(toLegacyProductView),
+    productCount: store.products.length,
+    rankRecordCount: store.products.reduce((count, product) => count + product.rankRecords.length, 0),
+    recognizedRankTypes: RANK_TYPES.filter((rankType) => rankTypes.includes(rankType)),
+    missingRankTypes: RANK_TYPES.filter((rankType) => !rankTypes.includes(rankType)),
+    sourceFiles: store.sourceFiles,
+    ...extra
+  };
 }
 
 async function readJsonBody(request) {
@@ -66,7 +88,10 @@ function getImportEntries(payload) {
     const productsPayload = entry.products ?? entry;
     const records = getProductRecords(productsPayload);
     const metadata = entry.metadata ?? productsPayload.metadata ?? {};
-    const rankType = detectRankType(entry.rank_type ?? entry.rankType ?? metadata.rank_type, entry.sourceFile);
+    const rankType = detectRankType(
+      entry.rankType ?? entry.rank_type ?? metadata.rankType ?? metadata.rank_type,
+      entry.sourceFile
+    );
     const invalidCount = records.filter((record) => !isProductRecord(record)).length;
     if (invalidCount) throw new Error(`${entry.sourceFile ?? "文件"} 有 ${invalidCount} 条记录缺少商品名称`);
     if (!records.length) throw new Error(`${entry.sourceFile ?? "文件"} 没有可导入的商品数据`);
@@ -76,17 +101,19 @@ function getImportEntries(payload) {
 
 function detectRankType(value, sourceFile = "") {
   const candidate = `${value ?? ""} ${sourceFile}`;
-  for (const rankType of ["直播榜", "短视频榜", "商品卡", "达人榜", "新品榜", "总榜"]) {
-    if (candidate.includes(rankType)) return rankType;
-  }
-  return normalizeRankType(value);
+  const labels = ["直播榜", "短视频榜", "商品卡", "达人榜", "新品榜", "总榜"];
+  const label = labels.find((item) => candidate.includes(item));
+  return normalizeRankType(label ?? value);
 }
 
 function mergeImports(existingProducts, entries, importedAt) {
   const products = [...existingProducts];
-  const indexedProducts = new Map(products.map((product, index) => [createProductIdentity(product.name, product.shopName), index]));
+  const indexedProducts = new Map(products.map((product, index) => [
+    createProductIdentity(product.name, product.shopName),
+    index
+  ]));
   let importedRecordCount = 0;
-  let mergedCount = 0;
+  let mergedProductCount = 0;
 
   for (const entry of entries) {
     const context = {
@@ -99,42 +126,62 @@ function mergeImports(existingProducts, entries, importedAt) {
       const incoming = normalizeProduct(record, index, entry.rankType, context);
       const identity = createProductIdentity(incoming.name, incoming.shopName);
       const existingIndex = indexedProducts.get(identity);
-      importedRecordCount += 1;
+      importedRecordCount += incoming.rankRecords.length;
       if (existingIndex === undefined) {
         products.push(incoming);
         indexedProducts.set(identity, products.length - 1);
         return;
       }
       products[existingIndex] = mergeProduct(products[existingIndex], incoming);
-      mergedCount += 1;
+      mergedProductCount += 1;
     });
   }
-  return { products, importedRecordCount, mergedCount };
+  return { products, importedRecordCount, mergedProductCount };
 }
 
 function mergeProduct(existing, incoming) {
-  const mergedRankings = [...existing.rankings];
-  for (const incomingRanking of incoming.rankings) {
-    const rankingIndex = mergedRankings.findIndex((ranking) => ranking.rank_type === incomingRanking.rank_type);
-    if (rankingIndex === -1) mergedRankings.push(incomingRanking);
-    else mergedRankings[rankingIndex] = incomingRanking;
+  const rankRecords = [...existing.rankRecords];
+  for (const incomingRecord of incoming.rankRecords) {
+    const recordIndex = rankRecords.findIndex((record) => record.rankType === incomingRecord.rankType);
+    if (recordIndex === -1) rankRecords.push(incomingRecord);
+    else rankRecords[recordIndex] = incomingRecord;
   }
-  const primaryRanking = selectPrimaryRanking(mergedRankings);
   return {
     ...existing,
     ...incoming,
-    rank: primaryRanking.rank,
-    rankChange: primaryRanking.rankChange,
-    rank_type: primaryRanking.rank_type,
-    rankings: mergedRankings,
-    videoCount: Math.max(existing.videoCount ?? 0, incoming.videoCount ?? 0),
-    creatorCount: Math.max(existing.creatorCount ?? 0, incoming.creatorCount ?? 0),
-    liveAccount: incoming.liveAccount || existing.liveAccount || ""
+    imageUrl: incoming.imageUrl || existing.imageUrl,
+    imageLabel: incoming.imageLabel || existing.imageLabel,
+    priceText: incoming.priceText || existing.priceText,
+    price: incoming.price || existing.price,
+    rankRecords
   };
 }
 
-async function saveProducts(products, sourceFiles, importedAt) {
-  const storedData = { version: 2, importedAt, products, sourceFiles };
+function mergeSourceFiles(previousFiles, entries, importedAt) {
+  const sourceFiles = Array.isArray(previousFiles) ? [...previousFiles] : [];
+  for (const entry of entries) {
+    const source = {
+      fileName: entry.sourceFile,
+      rankType: entry.rankType,
+      rankLabel: rankTypeLabel(entry.rankType),
+      category: entry.metadata.category_short ?? entry.metadata.category ?? null,
+      importedAt
+    };
+    const sourceIndex = sourceFiles.findIndex((item) => item.rankType === source.rankType);
+    if (sourceIndex === -1) sourceFiles.push(source);
+    else sourceFiles[sourceIndex] = source;
+  }
+  return sourceFiles;
+}
+
+async function saveStore(products, sourceFiles, importedAt) {
+  const storedData = {
+    version: 3,
+    schema: "product-rank-record",
+    importedAt,
+    products,
+    sourceFiles
+  };
   await mkdir(dataDirectory, { recursive: true });
   const temporaryFile = `${productsFile}.tmp`;
   await writeFile(temporaryFile, JSON.stringify(storedData, null, 2), "utf8");
@@ -146,30 +193,26 @@ const server = createServer(async (request, response) => {
   const requestedPath = new URL(request.url, `http://${request.headers.host}`).pathname;
   try {
     if (request.method === "GET" && requestedPath === "/api/products") {
-      sendJson(response, 200, await getStoredProducts());
+      sendJson(response, 200, buildProductResponse(await loadStore()));
       return;
     }
     if (request.method === "POST" && requestedPath === "/api/products/import") {
       const payload = await readJsonBody(request);
       const entries = getImportEntries(payload);
-      const previous = await getStoredProducts();
+      const previous = await loadStore();
       const importedAt = new Date().toISOString();
       const result = mergeImports(previous.products, entries, importedAt);
-      const sourceFiles = entries.map((entry) => ({
-        fileName: entry.sourceFile,
-        rank_type: entry.rankType,
-        category: entry.metadata.category_short ?? entry.metadata.category ?? null,
-        importedAt
-      }));
-      const storedData = await saveProducts(result.products, sourceFiles, importedAt);
-      sendJson(response, 201, {
-        importedAt,
+      const sourceFiles = mergeSourceFiles(previous.sourceFiles, entries, importedAt);
+      const storedData = await saveStore(result.products, sourceFiles, importedAt);
+      const recognizedRankTypes = RANK_TYPES.filter((rankType) => entries.some((entry) => entry.rankType === rankType));
+      const missingRankTypes = RANK_TYPES.filter((rankType) => !recognizedRankTypes.includes(rankType));
+      sendJson(response, 201, buildProductResponse(storedData, {
         importedCount: result.importedRecordCount,
         importedFileCount: entries.length,
-        mergedCount: result.mergedCount,
-        products: storedData.products,
-        sourceFiles
-      });
+        mergedProductCount: result.mergedProductCount,
+        recognizedRankTypes,
+        missingRankTypes
+      }));
       return;
     }
     if (requestedPath.startsWith("/api/")) {

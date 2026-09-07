@@ -67,7 +67,8 @@ function renderSources(product) {
     ? product.rankings
     : [{ rank_type: product.rank_type || "总榜", rank: product.rank }];
   return `<div class="source-list">${rankings.map((ranking) => {
-    const rank = Number.isFinite(Number(ranking.rank)) ? ` #${ranking.rank}` : "";
+    const hasRank = ranking.rank !== null && ranking.rank !== undefined && ranking.rank !== "";
+    const rank = hasRank && Number.isFinite(Number(ranking.rank)) ? ` #${ranking.rank}` : "";
     return `<span class="source-tag" title="${escapeHtml(`${ranking.rank_type}${rank}`)}">${escapeHtml(ranking.rank_type)}</span>`;
   }).join("")}</div>`;
 }
@@ -189,8 +190,11 @@ importButton.addEventListener("click", async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "导入失败");
     renderProducts(result.products, "已保存数据");
-    setValidation(`✓ 已导入 ${result.importedFileCount} 个榜单 · ${result.importedCount} 条记录 · 合并 ${result.mergedCount} 条重复商品`, "success");
-    importFeedback.textContent = `导入成功：当前本地共保存 ${result.products.length} 条商品。`;
+    const recognizedLabels = (result.recognizedRankTypes || []).map(rankTypeLabel).join("、") || "无";
+    const missingLabels = (result.missingRankTypes || []).map(rankTypeLabel).join("、");
+    const missingMessage = missingLabels ? ` · 缺失榜单：${missingLabels}` : " · 六榜齐全";
+    setValidation(`✓ 商品 ${result.productCount} 条 · 榜单记录 ${result.rankRecordCount} 条 · 已识别：${recognizedLabels}${missingMessage}`, "success");
+    importFeedback.textContent = `导入成功：${result.importedCount} 条榜单记录，合并 ${result.mergedProductCount} 个重复商品，本地共保存 ${result.productCount} 个商品。`;
   } catch (error) {
     importFeedback.textContent = `导入失败：${error.message || "请检查 JSON 文件格式。"}`;
   } finally {
@@ -212,6 +216,17 @@ function getDirectoryKey(file) {
 function detectRankType(value, sourceFile = "") {
   const candidate = `${value ?? ""} ${sourceFile}`;
   return ["直播榜", "短视频榜", "商品卡", "达人榜", "新品榜", "总榜"].find((rankType) => candidate.includes(rankType)) ?? "总榜";
+}
+
+function rankTypeLabel(rankType) {
+  return {
+    overall: "总榜",
+    live: "直播榜",
+    short_video: "短视频榜",
+    product_card: "商品卡",
+    creator: "达人榜",
+    new_product: "新品榜"
+  }[rankType] || rankType;
 }
 
 function isProductRecord(record) {

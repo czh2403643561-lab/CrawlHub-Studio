@@ -1,48 +1,76 @@
 /**
- * 统一商品数据模型。一个商品可以保留多个榜单中的排名来源。
- * 排名、视频、达人字段保持为可选，兼容不同榜单的数据差异。
- *
- * @typedef {Object} ProductRanking
- * @property {string} rank_type 榜单类型
+ * 六榜固定类型。存储层只允许使用这些英文枚举，界面显示名称由标签表转换。
+ * @typedef {"overall" | "live" | "short_video" | "product_card" | "creator" | "new_product"} RankType
+ */
+export const RANK_TYPES = ["overall", "live", "short_video", "product_card", "creator", "new_product"];
+
+export const RANK_TYPE_LABELS = {
+  overall: "总榜",
+  live: "直播榜",
+  short_video: "短视频榜",
+  product_card: "商品卡",
+  creator: "达人榜",
+  new_product: "新品榜"
+};
+
+const RANK_TYPE_ALIASES = {
+  overall: "overall", 总榜: "overall", overall榜: "overall",
+  live: "live", 直播榜: "live",
+  short_video: "short_video", shortvideo: "short_video", 短视频榜: "short_video",
+  product_card: "product_card", productcard: "product_card", 商品卡: "product_card",
+  creator: "creator", 达人榜: "creator",
+  new_product: "new_product", newproduct: "new_product", 新品榜: "new_product"
+};
+
+/** @typedef {Object} RankRecord
+ * @property {RankType} rankType 固定榜单类型
  * @property {number|null} rank 榜单排名
  * @property {number} rankChange 排名变化
- * @property {string|null} sourceFile 来源文件名
+ * @property {number} gmv GMV 区间下限
+ * @property {string} gmvText GMV 原始文本
+ * @property {number} clicks 点击量区间下限
+ * @property {string} clicksText 点击量原始文本
+ * @property {number} ctr CTR 区间下限
+ * @property {string} ctrText CTR 原始文本
+ * @property {number} rating 评分
+ * @property {number} reviewCount 评价数
+ * @property {number} similarProducts 相似商品数
+ * @property {number} videoCount 视频数
+ * @property {number} creatorCount 达人数
+ * @property {string} creatorText 达人原始文本
+ * @property {string} liveAccount 直播账号
+ * @property {number} bestVideoCount 表现最佳视频数量
+ * @property {Object[]|null} videos 视频数据
+ * @property {string|null} sourceFile 来源文件
  * @property {string|null} importedAt 导入时间
  * @property {string|null} category 分类
  * @property {string|null} sourceUrl 来源页面
- *
- * @typedef {Object} Product
+ */
+
+/** @typedef {Object} Product
  * @property {string} id 商品唯一标识
  * @property {string} name 商品名称
  * @property {string} imageUrl 商品图片地址
+ * @property {string} imageLabel 图片占位文字
  * @property {number} price 商品价格区间下限
- * @property {number} gmv 商品成交额区间下限
- * @property {number} clicks 点击量区间下限
- * @property {number} ctr 点击率区间下限（百分比）
- * @property {number} rating 商品评分
+ * @property {string} priceText 商品价格原始文本
  * @property {string} shopName 店铺名称
- * @property {ProductRanking[]} rankings 榜单来源与排名信息
- * @property {number} videoCount 关联视频数量
- * @property {number} creatorCount 关联达人数量
- * @property {string} liveAccount 直播账号信息
+ * @property {RankRecord[]} rankRecords 榜单记录
  */
 
-export const RANK_TYPES = ["总榜", "直播榜", "短视频榜", "商品卡", "达人榜", "新品榜"];
+export const productFields = ["id", "name", "imageUrl", "price", "shopName", "rankRecords"];
 
-export const productFields = [
-  "id", "name", "imageUrl", "price", "gmv", "clicks", "ctr", "rating", "shopName",
-  "rank", "rank_type", "rankings", "videoCount", "creatorCount", "liveAccount"
-];
-
-/** 将采集记录转换为工作台使用的统一商品结构。 */
-export function normalizeProduct(source, index = 0, defaultRankType = "总榜", context = {}) {
+/** 将采集记录转换为新的 Product + RankRecord 结构。 */
+export function normalizeProduct(source = {}, index = 0, defaultRankType = "overall", context = {}) {
   const name = asText(source.product_name ?? source.name, `未命名商品 ${index + 1}`);
-  const rankType = normalizeRankType(source.rank_type ?? source.rankType ?? defaultRankType);
-  const rankings = Array.isArray(source.rankings) && source.rankings.length
-    ? source.rankings.map((ranking) => normalizeRanking(ranking, rankType, context))
-    : [normalizeRanking(source, rankType, context)];
-  const primaryRanking = selectPrimaryRanking(rankings);
-  const videos = Array.isArray(source.videos) ? source.videos : [];
+  const rankRecords = Array.isArray(source.rankRecords) && source.rankRecords.length
+    ? source.rankRecords.map((record) => normalizeRankRecord(record, defaultRankType, context))
+    : Array.isArray(source.rankings) && source.rankings.length
+      ? source.rankings.map((record) => normalizeRankRecord(record, defaultRankType, {
+        ...context,
+        legacyProduct: source
+      }))
+      : [normalizeRankRecord(source, defaultRankType, context)];
 
   return {
     id: asText(source.id, `product-${hashText(createProductIdentity(name, source.shopName ?? source.shop))}`),
@@ -51,34 +79,34 @@ export function normalizeProduct(source, index = 0, defaultRankType = "总榜", 
     imageLabel: asText(source.imageLabel, createImageLabel(name)),
     price: parseRangeNumber(source.priceText ?? source.price, 0),
     priceText: asText(source.priceText ?? source.price),
-    gmv: parseRangeNumber(source.gmvText ?? source.gmv, 0),
-    gmvText: asText(source.gmvText ?? source.gmv),
-    clicks: parseRangeNumber(source.clicksText ?? source.clicks, 0),
-    clicksText: asText(source.clicksText ?? source.clicks),
-    ctr: parseRangeNumber(source.ctrText ?? source.ctr, 0),
-    ctrText: asText(source.ctrText ?? source.ctr),
-    rating: asNumber(source.rating, 0),
-    reviewCount: asNumber(source.reviewCount ?? source.review_count, 0),
     shopName: asText(source.shopName ?? source.shop, "未提供店铺"),
-    rank: primaryRanking.rank,
-    rankChange: primaryRanking.rankChange,
-    similarProducts: asNumber(source.similarProducts ?? source.similar_products, 0),
-    rank_type: primaryRanking.rank_type,
-    rankings,
-    videoCount: videos.length || countRelated(source.related_content?.video, source.best_video),
-    creatorCount: countRelated(source.related_content?.creator, source.creator),
-    creatorText: asText(source.creator),
-    liveAccount: asText(source.liveAccount ?? source.live_account),
-    bestVideoCount: parseRangeNumber(source.best_video, 0)
+    rankRecords
   };
 }
 
-export function normalizeRanking(source, defaultRankType = "总榜", context = {}) {
-  const hasRank = Object.hasOwn(source, "rank");
+export function normalizeRankRecord(source = {}, defaultRankType = "overall", context = {}) {
+  const legacyProduct = context.legacyProduct ?? {};
+  const rankType = normalizeRankType(source.rankType ?? source.rank_type ?? defaultRankType);
+  const videos = Array.isArray(source.videos) ? source.videos : null;
   return {
-    rank_type: normalizeRankType(source.rank_type ?? source.rankType ?? defaultRankType),
-    rank: hasRank ? asNullableNumber(source.rank) : null,
+    rankType,
+    rank: hasValue(source, "rank") ? asNullableNumber(source.rank) : null,
     rankChange: asNumber(source.rankChange ?? source.rank_change, 0),
+    gmv: parseRangeNumber(source.gmvText ?? source.gmv ?? legacyProduct.gmvText ?? legacyProduct.gmv, 0),
+    gmvText: asText(source.gmvText ?? source.gmv ?? legacyProduct.gmvText ?? legacyProduct.gmv),
+    clicks: parseRangeNumber(source.clicksText ?? source.clicks ?? legacyProduct.clicksText ?? legacyProduct.clicks, 0),
+    clicksText: asText(source.clicksText ?? source.clicks ?? legacyProduct.clicksText ?? legacyProduct.clicks),
+    ctr: parseRangeNumber(source.ctrText ?? source.ctr ?? legacyProduct.ctrText ?? legacyProduct.ctr, 0),
+    ctrText: asText(source.ctrText ?? source.ctr ?? legacyProduct.ctrText ?? legacyProduct.ctr),
+    rating: asNumber(source.rating ?? legacyProduct.rating, 0),
+    reviewCount: asNumber(source.reviewCount ?? source.review_count ?? legacyProduct.reviewCount, 0),
+    similarProducts: asNumber(source.similarProducts ?? source.similar_products ?? legacyProduct.similarProducts, 0),
+    videoCount: videos?.length || countRelated(source.related_content?.video, source.best_video),
+    creatorCount: countRelated(source.related_content?.creator, source.creator),
+    creatorText: asText(source.creator),
+    liveAccount: asText(source.liveAccount ?? source.live_account),
+    bestVideoCount: parseRangeNumber(source.best_video, 0),
+    videos,
     sourceFile: asNullableText(source.sourceFile ?? context.sourceFile),
     importedAt: asNullableText(source.importedAt ?? context.importedAt),
     category: asNullableText(source.category ?? context.category),
@@ -86,24 +114,73 @@ export function normalizeRanking(source, defaultRankType = "总榜", context = {
   };
 }
 
+/** 将固定枚举或历史中文值转换为固定 RankType；未知值统一回退总榜。 */
 export function normalizeRankType(value) {
-  const text = asText(value, "总榜");
-  return RANK_TYPES.includes(text) ? text : "总榜";
+  const key = asText(value).toLocaleLowerCase().replace(/[\s-]+/g, "_");
+  return RANK_TYPE_ALIASES[key] ?? "overall";
 }
 
-export function selectPrimaryRanking(rankings = []) {
-  return rankings.find((ranking) => ranking.rank_type === "总榜")
-    ?? rankings.find((ranking) => ranking.rank !== null)
-    ?? rankings[0]
-    ?? normalizeRanking({}, "总榜");
+export function rankTypeLabel(rankType) {
+  return RANK_TYPE_LABELS[normalizeRankType(rankType)];
 }
 
 export function createProductIdentity(name, shopName) {
   return `${normalizeIdentityPart(name)}|${normalizeIdentityPart(shopName)}`;
 }
 
+/** 为旧页面提供只读兼容字段，不写回旧结构。 */
+export function toLegacyProductView(product) {
+  const primary = selectPrimaryRankRecord(product.rankRecords);
+  return {
+    ...product,
+    rank: primary.rank,
+    rankChange: primary.rankChange,
+    price: product.price,
+    priceText: product.priceText,
+    gmv: primary.gmv,
+    gmvText: primary.gmvText,
+    clicks: primary.clicks,
+    clicksText: primary.clicksText,
+    ctr: primary.ctr,
+    ctrText: primary.ctrText,
+    rating: primary.rating,
+    reviewCount: primary.reviewCount,
+    similarProducts: primary.similarProducts,
+    rank_type: rankTypeLabel(primary.rankType),
+    rankings: product.rankRecords.map(toLegacyRankingView),
+    videoCount: primary.videoCount,
+    creatorCount: primary.creatorCount,
+    creatorText: primary.creatorText,
+    liveAccount: primary.liveAccount,
+    bestVideoCount: primary.bestVideoCount
+  };
+}
+
+function toLegacyRankingView(record) {
+  return {
+    rank_type: rankTypeLabel(record.rankType),
+    rank: record.rank,
+    rankChange: record.rankChange,
+    sourceFile: record.sourceFile,
+    importedAt: record.importedAt,
+    category: record.category,
+    sourceUrl: record.sourceUrl
+  };
+}
+
+export function selectPrimaryRankRecord(records = []) {
+  return records.find((record) => record.rankType === "overall")
+    ?? records.find((record) => record.rank !== null)
+    ?? records[0]
+    ?? normalizeRankRecord();
+}
+
 function normalizeIdentityPart(value) {
   return asText(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function hasValue(source, key) {
+  return Object.prototype.hasOwnProperty.call(source, key);
 }
 
 function asText(value, fallback = "") {
