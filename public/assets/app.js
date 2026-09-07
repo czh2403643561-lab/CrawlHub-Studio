@@ -1,10 +1,63 @@
 import { mockProducts } from "../modules/products/mock-products.js";
 
+const RANK_CONFIG = {
+  overall: {
+    label: "总榜",
+    description: "TikTok Shop 全渠道热卖商品榜，按 GMV 表现排序。",
+    columns: ["rank", "change", "product", "gmv", "clicks", "ctr", "rating", "shop", "actions"]
+  },
+  live: {
+    label: "直播榜",
+    description: "直播渠道产生的商品 GMV 排名。",
+    columns: ["rank", "product", "liveAccount", "gmv", "actions"]
+  },
+  short_video: {
+    label: "短视频榜",
+    description: "通过短视频挂车渠道成交的商品榜单。",
+    columns: ["rank", "product", "videos", "gmv", "actions"]
+  },
+  product_card: {
+    label: "商品卡",
+    description: "商品卡渠道的商品 GMV 与转化表现。",
+    columns: ["rank", "product", "gmv", "clicks", "ctr", "actions"]
+  },
+  creator: {
+    label: "达人榜",
+    description: "达人合作带货产生的商品 GMV 排名。",
+    columns: ["rank", "product", "creators", "gmv", "actions"]
+  },
+  new_product: {
+    label: "新品榜",
+    description: "近期上架商品的 GMV 与转化表现。",
+    columns: ["rank", "product", "gmv", "clicks", "ctr", "actions"]
+  }
+};
+
+const COLUMN_LABELS = {
+  rank: "排名",
+  change: "变化",
+  product: "商品",
+  gmv: "GMV",
+  clicks: "点击量",
+  ctr: "CTR",
+  rating: "评分",
+  shop: "店铺",
+  liveAccount: "直播账号",
+  videos: "视频相关信息",
+  creators: "达人信息",
+  actions: "操作"
+};
+
+const table = document.querySelector("#product-table");
+const tableHead = document.querySelector("#product-table-head");
 const tableBody = document.querySelector("#product-table-body");
 const productCount = document.querySelector("#product-count");
 const productCountNote = document.querySelector("#product-count-note");
 const tableCount = document.querySelector("#table-count");
 const productSource = document.querySelector("#product-source");
+const activeRankTitle = document.querySelector("#active-rank-title");
+const productListTitle = document.querySelector("#product-list-title");
+const rankTabs = [...document.querySelectorAll(".rank-tab")];
 const importFile = document.querySelector("#import-file");
 const importDirectory = document.querySelector("#import-directory");
 const importButton = document.querySelector("#import-button");
@@ -13,90 +66,180 @@ const importFileName = document.querySelector("#import-file-name");
 const importFileSize = document.querySelector("#import-file-size");
 const importValidation = document.querySelector("#import-validation");
 
+let activeRankType = "overall";
+let products = [];
+let sourceLabel = "模拟数据";
 let selectedImport = { imports: [], fileCount: 0, recordCount: 0, rankTypes: [], valid: false };
 
-function renderProducts(products, sourceLabel) {
-  productCount.textContent = `${products.length} 条商品`;
-  tableCount.textContent = `${products.length} 条`;
-  productCountNote.textContent = sourceLabel === "已保存数据" ? "已保存到当前电脑" : "使用模拟数据验证页面";
+function renderWorkspace() {
+  const config = RANK_CONFIG[activeRankType];
+  const rows = getRankRows(activeRankType);
+  renderTabCounts();
+  productCount.textContent = `${rows.length} 条商品`;
+  tableCount.textContent = `${rows.length} 条`;
+  productCountNote.textContent = sourceLabel === "已保存数据" ? config.description : "使用模拟数据验证页面";
   productSource.textContent = sourceLabel;
-  tableBody.innerHTML = products.map(renderProductRow).join("");
-  tableBody.querySelectorAll(".product-thumb").forEach((image) => {
-    image.addEventListener("error", () => {
-      image.hidden = true;
-      image.nextElementSibling.hidden = false;
-    });
+  activeRankTitle.textContent = `TikTok 热卖商品${config.label}`;
+  productListTitle.textContent = `TikTok 热卖商品${config.label}`;
+  table.className = `product-table rank-table rank-table-${activeRankType}`;
+  tableHead.innerHTML = `<tr>${config.columns.map(renderHeader).join("")}</tr>`;
+  tableBody.innerHTML = rows.length
+    ? rows.map((row) => renderRankRow(row, config)).join("")
+    : `<tr><td class="empty-cell" colspan="${config.columns.length}">暂无${config.label}数据，请导入对应榜单 JSON 文件。</td></tr>`;
+  tableBody.querySelectorAll(".product-thumb, .video-thumb").forEach((image) => {
+    image.addEventListener("error", () => image.closest(".thumb-wrap, .video-cover")?.classList.add("image-failed"));
   });
 }
 
-function renderProductRow(product) {
+function renderTabCounts() {
+  for (const [rankType] of Object.entries(RANK_CONFIG)) {
+    const count = getRankRows(rankType).length;
+    const countElement = document.querySelector(`[data-rank-count="${rankType}"]`);
+    if (countElement) countElement.textContent = count;
+  }
+}
+
+function renderHeader(column) {
+  const textLeft = ["product", "liveAccount", "videos", "creators"].includes(column) ? " text-left" : "";
+  return `<th scope="col" class="col-${column}${textLeft}">${COLUMN_LABELS[column]}</th>`;
+}
+
+function getRankRows(rankType) {
+  return products
+    .flatMap((product) => getRankRecords(product)
+      .filter((record) => record.rankType === rankType)
+      .map((record) => ({ product, record })))
+    .sort((left, right) => compareRankRows(left.record, right.record));
+}
+
+function getRankRecords(product) {
+  if (Array.isArray(product.rankRecords) && product.rankRecords.length) return product.rankRecords;
+  return [{
+    rankType: "overall",
+    rank: product.rank,
+    rankChange: product.rankChange,
+    gmv: product.gmv,
+    gmvText: product.gmvText,
+    clicks: product.clicks,
+    clicksText: product.clicksText,
+    ctr: product.ctr,
+    ctrText: product.ctrText,
+    rating: product.rating,
+    reviewCount: product.reviewCount,
+    similarProducts: product.similarProducts
+  }];
+}
+
+function compareRankRows(left, right) {
+  const leftRank = toNullableNumber(left.rank);
+  const rightRank = toNullableNumber(right.rank);
+  if (leftRank === null && rightRank === null) return right.gmv - left.gmv;
+  if (leftRank === null) return 1;
+  if (rightRank === null) return -1;
+  return leftRank - rightRank;
+}
+
+function renderRankRow({ product, record }, config) {
+  return `<tr>${config.columns.map((column) => `<td class="cell-${column}">${renderCell(column, product, record)}</td>`).join("")}</tr>`;
+}
+
+function renderCell(column, product, record) {
+  if (column === "rank") return formatRank(record.rank);
+  if (column === "change") return formatRankChange(record.rankChange);
+  if (column === "product") return renderProductCell(product, record);
+  if (column === "gmv") return escapeHtml(record.gmvText || formatNumber(record.gmv));
+  if (column === "clicks") return escapeHtml(record.clicksText || formatNumber(record.clicks));
+  if (column === "ctr") return escapeHtml(record.ctrText || formatPercent(record.ctr));
+  if (column === "rating") return formatRating(record.rating);
+  if (column === "shop") return `<span title="${escapeHtml(product.shopName)}">${escapeHtml(product.shopName)}</span>`;
+  if (column === "liveAccount") return renderLiveAccount(record.liveAccount);
+  if (column === "videos") return renderVideos(record);
+  if (column === "creators") return renderCreators(record);
+  if (column === "actions") return renderActions();
+  return "—";
+}
+
+function renderProductCell(product, record) {
   const imageMarkup = product.imageUrl
     ? `<img class="product-thumb" src="${escapeHtml(product.imageUrl)}" alt="" loading="lazy" />`
     : "";
-  return `
-    <tr>
-      <td class="rank-cell">${formatRank(product.rank)}</td>
-      <td class="change-cell">${formatRankChange(product.rankChange)}</td>
-      <td class="product-cell">
-        <div class="thumb-wrap">
-          ${imageMarkup}
-          <span class="thumb-fallback" ${product.imageUrl ? "hidden" : ""}>${escapeHtml(product.imageLabel)}</span>
-        </div>
-        <div class="product-copy">
-          <strong class="product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
-          <span class="product-rating-note">评分 ${formatRating(product.rating)}</span>
-        </div>
-      </td>
-      <td class="source-cell">${renderSources(product)}</td>
-      <td class="metric-cell">${escapeHtml(product.priceText || formatNumber(product.price))}</td>
-      <td class="metric-cell">${escapeHtml(product.gmvText || formatNumber(product.gmv))}</td>
-      <td class="metric-cell">${escapeHtml(product.clicksText || formatNumber(product.clicks))}</td>
-      <td class="metric-cell">${escapeHtml(product.ctrText || `${product.ctr}%`)}</td>
-      <td class="rating-cell">${formatRating(product.rating)}</td>
-      <td class="shop-cell" title="${escapeHtml(product.shopName)}">${escapeHtml(product.shopName)}</td>
-      <td class="similar-cell">${formatNumber(product.similarProducts)}</td>
-      <td class="action-cell">
-        <button class="table-action" type="button" disabled title="商品详情功能待接入">查看</button>
-        <button class="table-action secondary" type="button" disabled title="收藏功能待接入">收藏</button>
-      </td>
-    </tr>`;
+  const rating = formatRating(record.rating);
+  const ratingNote = rating === "—" ? "暂无评分" : `评分 ${rating}${record.reviewCount ? ` · ${formatNumber(record.reviewCount)} 条评价` : ""}`;
+  return `<div class="product-cell">
+    <div class="thumb-wrap">
+      ${imageMarkup}
+      <span class="thumb-fallback" ${product.imageUrl ? "hidden" : ""}>${escapeHtml(product.imageLabel)}</span>
+    </div>
+    <div class="product-copy">
+      <strong class="product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
+      <span class="product-meta">${escapeHtml(product.priceText || formatNumber(product.price))} · ${escapeHtml(product.shopName)}</span>
+      <span class="product-rating-note">${ratingNote}</span>
+    </div>
+  </div>`;
 }
 
-function renderSources(product) {
-  const rankings = Array.isArray(product.rankings) && product.rankings.length
-    ? product.rankings
-    : [{ rank_type: product.rank_type || "总榜", rank: product.rank }];
-  return `<div class="source-list">${rankings.map((ranking) => {
-    const hasRank = ranking.rank !== null && ranking.rank !== undefined && ranking.rank !== "";
-    const rank = hasRank && Number.isFinite(Number(ranking.rank)) ? ` #${ranking.rank}` : "";
-    return `<span class="source-tag" title="${escapeHtml(`${ranking.rank_type}${rank}`)}">${escapeHtml(ranking.rank_type)}</span>`;
-  }).join("")}</div>`;
+function renderLiveAccount(value) {
+  if (!value) return "—";
+  const [accountName, accountId] = String(value).split(/\s+ID:\s*/i);
+  return `<div class="account-cell"><strong>${escapeHtml(accountName)}</strong>${accountId ? `<span>ID: ${escapeHtml(accountId)}</span>` : ""}</div>`;
+}
+
+function renderVideos(record) {
+  const videos = Array.isArray(record.videos) ? record.videos.filter((video) => video?.cover) : [];
+  if (!videos.length && !record.videoCount && !record.bestVideoCount) return "—";
+  const visibleVideos = videos.slice(0, 4);
+  const total = record.videoCount || record.bestVideoCount || videos.length;
+  const remaining = Math.max(total - visibleVideos.length, 0);
+  const covers = visibleVideos.map((video) => `<span class="video-cover"><img class="video-thumb" src="${escapeHtml(video.cover)}" alt="" loading="lazy" /><i>▶</i></span>`).join("");
+  const fallback = !covers ? '<span class="video-cover video-empty">▶</span>' : "";
+  const more = remaining ? `<span class="video-more">+${remaining}</span>` : "";
+  return `<div class="video-list">${covers || fallback}${more}</div>`;
+}
+
+function renderCreators(record) {
+  if (!record.creatorCount && !record.creatorText) return "—";
+  const count = record.creatorCount ? `共 ${record.creatorCount} 位达人` : "达人信息";
+  return `<div class="creator-cell"><span class="creator-avatars">♙</span><div><strong>${escapeHtml(count)}</strong>${record.creatorText ? `<span>${escapeHtml(record.creatorText)}</span>` : ""}</div></div>`;
+}
+
+function renderActions() {
+  return `<button class="table-action" type="button" disabled title="商品详情功能待接入">查看</button><button class="table-action secondary" type="button" disabled title="收藏功能待接入">收藏</button>`;
 }
 
 function formatRank(value) {
-  const rank = Number(value);
+  const rank = toNullableNumber(value);
+  if (rank === null) return "—";
   if (rank === 1) return "♛ 1";
   if (rank === 2) return "♛ 2";
   if (rank === 3) return "♛ 3";
-  return Number.isFinite(rank) ? String(rank) : "-";
+  return String(rank);
 }
 
 function formatRankChange(value) {
   const change = Number(value);
   if (!Number.isFinite(change) || change === 0) return '<span class="change-flat">—</span>';
-  const direction = change > 0 ? "up" : "down";
-  const symbol = change > 0 ? "↑" : "↓";
-  return `<span class="change-${direction}">${symbol} ${formatNumber(Math.abs(change))}</span>`;
+  return `<span class="change-${change > 0 ? "up" : "down"}">${change > 0 ? "↑" : "↓"} ${formatNumber(Math.abs(change))}</span>`;
 }
 
 function formatRating(value) {
   const rating = Number(value);
-  return Number.isFinite(rating) && rating > 0 ? `${rating.toFixed(1)}/5` : "-";
+  return Number.isFinite(rating) && rating > 0 ? `${rating.toFixed(1)}/5` : "—";
+}
+
+function formatPercent(value) {
+  const percent = Number(value);
+  return Number.isFinite(percent) ? `${percent}%` : "—";
 }
 
 function formatNumber(value) {
   const number = Number(value);
-  return Number.isFinite(number) ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number) : "-";
+  return Number.isFinite(number) ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number) : "—";
+}
+
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 async function loadStoredProducts() {
@@ -104,15 +247,25 @@ async function loadStoredProducts() {
     const response = await fetch("/api/products");
     const storedData = await response.json();
     if (storedData.products?.length) {
-      renderProducts(storedData.products, "已保存数据");
-      importFeedback.textContent = `已读取 ${storedData.products.length} 条本地保存的商品数据。`;
+      products = storedData.products;
+      sourceLabel = "已保存数据";
+      importFeedback.textContent = `已读取 ${storedData.productCount ?? products.length} 个本地商品和 ${storedData.rankRecordCount ?? 0} 条榜单记录。`;
+      renderWorkspace();
       return;
     }
   } catch {
     importFeedback.textContent = "暂时无法读取本地商品数据。";
   }
-  renderProducts(mockProducts, "模拟数据");
+  products = mockProducts;
+  sourceLabel = "模拟数据";
+  renderWorkspace();
 }
+
+rankTabs.forEach((tab) => tab.addEventListener("click", () => {
+  activeRankType = tab.dataset.rankType;
+  rankTabs.forEach((item) => item.classList.toggle("active", item === tab));
+  renderWorkspace();
+}));
 
 importFile.addEventListener("change", () => prepareImport(Array.from(importFile.files), "JSON 文件"));
 importDirectory.addEventListener("change", () => prepareImport(Array.from(importDirectory.files), "榜单文件夹"));
@@ -126,7 +279,6 @@ async function prepareImport(files, selectionLabel) {
     setValidation("选择 JSON 文件或六榜数据文件夹后将进行校验。", "neutral");
     return;
   }
-
   importFileName.textContent = `已选择 ${files.length} 个 JSON 文件（${selectionLabel}）`;
   importFileSize.textContent = formatFileSize(files.reduce((sum, file) => sum + file.size, 0));
   setValidation("正在读取并校验文件…", "neutral");
@@ -146,39 +298,23 @@ async function prepareImport(files, selectionLabel) {
 }
 
 async function createImportEntries(files) {
-  const parsedFiles = await Promise.all(files.map(async (file) => ({
-    file,
-    payload: JSON.parse(await file.text()),
-    directory: getDirectoryKey(file)
-  })));
+  const parsedFiles = await Promise.all(files.map(async (file) => ({ file, payload: JSON.parse(await file.text()), directory: getDirectoryKey(file) })));
   const metadataByDirectory = new Map();
-  for (const item of parsedFiles.filter((item) => item.file.name.toLowerCase() === "metadata.json")) {
-    metadataByDirectory.set(item.directory, item.payload);
-  }
+  for (const item of parsedFiles.filter((item) => item.file.name.toLowerCase() === "metadata.json")) metadataByDirectory.set(item.directory, item.payload);
   const productFiles = parsedFiles.filter((item) => item.file.name.toLowerCase() !== "metadata.json");
   if (!productFiles.length) throw new Error("未找到 products.json 商品数据文件");
-
   return productFiles.map((item) => {
     const records = getImportRecords(item.payload);
     const validRecordCount = records.filter(isProductRecord).length;
     if (!records.length) throw new Error(`${item.file.name} 中没有商品数据`);
     if (validRecordCount !== records.length) throw new Error(`${item.file.name} 有 ${records.length - validRecordCount} 条记录缺少商品名称`);
     const metadata = metadataByDirectory.get(item.directory) ?? item.payload.metadata ?? {};
-    return {
-      products: item.payload,
-      metadata,
-      sourceFile: item.file.webkitRelativePath || item.file.name,
-      recordCount: records.length,
-      rankType: detectRankType(metadata.rank_type ?? item.payload.rank_type, item.file.webkitRelativePath || item.file.name)
-    };
+    return { products: item.payload, metadata, sourceFile: item.file.webkitRelativePath || item.file.name, recordCount: records.length, rankType: rankTypeLabelFromFile(metadata.rank_type ?? item.payload.rank_type, item.file.webkitRelativePath || item.file.name) };
   });
 }
 
 importButton.addEventListener("click", async () => {
-  if (!selectedImport.valid) {
-    importFeedback.textContent = "请先选择并通过校验的 JSON 商品文件。";
-    return;
-  }
+  if (!selectedImport.valid) return;
   importButton.disabled = true;
   importFeedback.textContent = "正在合并并保存到本地…";
   try {
@@ -189,12 +325,13 @@ importButton.addEventListener("click", async () => {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "导入失败");
-    renderProducts(result.products, "已保存数据");
+    products = result.products;
+    sourceLabel = "已保存数据";
+    renderWorkspace();
     const recognizedLabels = (result.recognizedRankTypes || []).map(rankTypeLabel).join("、") || "无";
     const missingLabels = (result.missingRankTypes || []).map(rankTypeLabel).join("、");
-    const missingMessage = missingLabels ? ` · 缺失榜单：${missingLabels}` : " · 六榜齐全";
-    setValidation(`✓ 商品 ${result.productCount} 条 · 榜单记录 ${result.rankRecordCount} 条 · 已识别：${recognizedLabels}${missingMessage}`, "success");
-    importFeedback.textContent = `导入成功：${result.importedCount} 条榜单记录，合并 ${result.mergedProductCount} 个重复商品，本地共保存 ${result.productCount} 个商品。`;
+    setValidation(`✓ 商品 ${result.productCount} 条 · 榜单记录 ${result.rankRecordCount} 条 · 已识别：${recognizedLabels}${missingLabels ? ` · 缺失榜单：${missingLabels}` : " · 六榜齐全"}`, "success");
+    importFeedback.textContent = `导入成功：${result.importedCount} 条榜单记录，合并 ${result.mergedProductCount} 个重复商品。`;
   } catch (error) {
     importFeedback.textContent = `导入失败：${error.message || "请检查 JSON 文件格式。"}`;
   } finally {
@@ -213,20 +350,13 @@ function getDirectoryKey(file) {
   return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 }
 
-function detectRankType(value, sourceFile = "") {
+function rankTypeLabelFromFile(value, sourceFile = "") {
   const candidate = `${value ?? ""} ${sourceFile}`;
   return ["直播榜", "短视频榜", "商品卡", "达人榜", "新品榜", "总榜"].find((rankType) => candidate.includes(rankType)) ?? "总榜";
 }
 
 function rankTypeLabel(rankType) {
-  return {
-    overall: "总榜",
-    live: "直播榜",
-    short_video: "短视频榜",
-    product_card: "商品卡",
-    creator: "达人榜",
-    new_product: "新品榜"
-  }[rankType] || rankType;
+  return RANK_CONFIG[rankType]?.label || rankType;
 }
 
 function isProductRecord(record) {

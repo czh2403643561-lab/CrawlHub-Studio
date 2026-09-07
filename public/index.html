@@ -34,7 +34,7 @@
             <div>
               <p class="breadcrumb">商品数据 / TikTok 热卖商品榜</p>
               <h1>商品数据</h1>
-              <p class="page-description">集中浏览商品封面、榜单表现和店铺信息。</p>
+              <p class="page-description">按榜单浏览商品表现与渠道数据。</p>
             </div>
             <div class="page-meta">
               <strong id="product-count">0 条商品</strong>
@@ -42,12 +42,21 @@
             </div>
           </section>
 
+          <nav class="rank-tabs" aria-label="商品榜单">
+            <button class="rank-tab active" type="button" data-rank-type="overall">总榜 <span data-rank-count="overall">0</span></button>
+            <button class="rank-tab" type="button" data-rank-type="live">直播榜 <span data-rank-count="live">0</span></button>
+            <button class="rank-tab" type="button" data-rank-type="short_video">短视频榜 <span data-rank-count="short_video">0</span></button>
+            <button class="rank-tab" type="button" data-rank-type="product_card">商品卡 <span data-rank-count="product_card">0</span></button>
+            <button class="rank-tab" type="button" data-rank-type="creator">达人榜 <span data-rank-count="creator">0</span></button>
+            <button class="rank-tab" type="button" data-rank-type="new_product">新品榜 <span data-rank-count="new_product">0</span></button>
+          </nav>
+
           <section class="toolbar" aria-label="商品数据工具栏">
             <div class="toolbar-top">
               <div class="dataset-info">
                 <span class="dataset-dot"></span>
                 <div>
-                  <strong>TikTok 热卖商品榜</strong>
+                  <strong id="active-rank-title">TikTok 热卖商品总榜</strong>
                   <small id="product-count-note">正在读取本地数据</small>
                 </div>
               </div>
@@ -84,41 +93,12 @@
             <div class="table-heading">
               <div>
                 <p class="eyebrow">商品榜单</p>
-                <h2 id="product-list-title">TikTok 热卖商品</h2>
+                <h2 id="product-list-title">TikTok 热卖商品总榜</h2>
               </div>
               <span class="table-count" id="table-count">0 条</span>
             </div>
-            <table class="product-table">
-              <colgroup>
-                <col class="col-rank" />
-                <col class="col-change" />
-                <col class="col-product" />
-                <col class="col-source" />
-                <col class="col-price" />
-                <col class="col-gmv" />
-                <col class="col-clicks" />
-                <col class="col-ctr" />
-                <col class="col-rating" />
-                <col class="col-shop" />
-                <col class="col-similar" />
-                <col class="col-actions" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th scope="col">排名</th>
-                  <th scope="col">变化</th>
-                  <th scope="col" class="text-left">商品</th>
-                  <th scope="col">榜单来源</th>
-                  <th scope="col">价格</th>
-                  <th scope="col">GMV</th>
-                  <th scope="col">点击量</th>
-                  <th scope="col">CTR</th>
-                  <th scope="col">评分</th>
-                  <th scope="col">店铺</th>
-                  <th scope="col">相似商品</th>
-                  <th scope="col">操作</th>
-                </tr>
-              </thead>
+            <table class="product-table rank-table" id="product-table">
+              <thead id="product-table-head"></thead>
               <tbody id="product-table-body"></tbody>
             </table>
           </section>
