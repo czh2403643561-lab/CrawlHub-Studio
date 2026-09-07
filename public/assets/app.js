@@ -6,25 +6,20 @@ const productCountNote = document.querySelector("#product-count-note");
 const tableCount = document.querySelector("#table-count");
 const productSource = document.querySelector("#product-source");
 const importFile = document.querySelector("#import-file");
+const importDirectory = document.querySelector("#import-directory");
 const importButton = document.querySelector("#import-button");
 const importFeedback = document.querySelector("#import-feedback");
 const importFileName = document.querySelector("#import-file-name");
 const importFileSize = document.querySelector("#import-file-size");
 const importValidation = document.querySelector("#import-validation");
 
-let selectedImport = {
-  file: null,
-  payload: null,
-  recordCount: 0,
-  valid: false
-};
+let selectedImport = { imports: [], fileCount: 0, recordCount: 0, rankTypes: [], valid: false };
 
 function renderProducts(products, sourceLabel) {
   productCount.textContent = `${products.length} 条商品`;
   tableCount.textContent = `${products.length} 条`;
   productCountNote.textContent = sourceLabel === "已保存数据" ? "已保存到当前电脑" : "使用模拟数据验证页面";
   productSource.textContent = sourceLabel;
-
   tableBody.innerHTML = products.map(renderProductRow).join("");
   tableBody.querySelectorAll(".product-thumb").forEach((image) => {
     image.addEventListener("error", () => {
@@ -38,7 +33,6 @@ function renderProductRow(product) {
   const imageMarkup = product.imageUrl
     ? `<img class="product-thumb" src="${escapeHtml(product.imageUrl)}" alt="" loading="lazy" />`
     : "";
-
   return `
     <tr>
       <td class="rank-cell">${formatRank(product.rank)}</td>
@@ -53,6 +47,7 @@ function renderProductRow(product) {
           <span class="product-rating-note">评分 ${formatRating(product.rating)}</span>
         </div>
       </td>
+      <td class="source-cell">${renderSources(product)}</td>
       <td class="metric-cell">${escapeHtml(product.priceText || formatNumber(product.price))}</td>
       <td class="metric-cell">${escapeHtml(product.gmvText || formatNumber(product.gmv))}</td>
       <td class="metric-cell">${escapeHtml(product.clicksText || formatNumber(product.clicks))}</td>
@@ -65,6 +60,16 @@ function renderProductRow(product) {
         <button class="table-action secondary" type="button" disabled title="收藏功能待接入">收藏</button>
       </td>
     </tr>`;
+}
+
+function renderSources(product) {
+  const rankings = Array.isArray(product.rankings) && product.rankings.length
+    ? product.rankings
+    : [{ rank_type: product.rank_type || "总榜", rank: product.rank }];
+  return `<div class="source-list">${rankings.map((ranking) => {
+    const rank = Number.isFinite(Number(ranking.rank)) ? ` #${ranking.rank}` : "";
+    return `<span class="source-tag" title="${escapeHtml(`${ranking.rank_type}${rank}`)}">${escapeHtml(ranking.rank_type)}</span>`;
+  }).join("")}</div>`;
 }
 
 function formatRank(value) {
@@ -105,81 +110,87 @@ async function loadStoredProducts() {
   } catch {
     importFeedback.textContent = "暂时无法读取本地商品数据。";
   }
-
   renderProducts(mockProducts, "模拟数据");
 }
 
-importFile.addEventListener("change", async () => {
-  const [file] = importFile.files;
-  selectedImport = { file, payload: null, recordCount: 0, valid: false };
-  importButton.disabled = true;
+importFile.addEventListener("change", () => prepareImport(Array.from(importFile.files), "JSON 文件"));
+importDirectory.addEventListener("change", () => prepareImport(Array.from(importDirectory.files), "榜单文件夹"));
 
-  if (!file) {
+async function prepareImport(files, selectionLabel) {
+  selectedImport = { imports: [], fileCount: files.length, recordCount: 0, rankTypes: [], valid: false };
+  importButton.disabled = true;
+  if (!files.length) {
     importFileName.textContent = "尚未选择文件";
     importFileSize.textContent = "";
-    setValidation("选择文件后将进行 JSON 格式和商品数据校验。", "neutral");
+    setValidation("选择 JSON 文件或六榜数据文件夹后将进行校验。", "neutral");
     return;
   }
 
-  importFileName.textContent = file.name;
-  importFileSize.textContent = formatFileSize(file.size);
+  importFileName.textContent = `已选择 ${files.length} 个 JSON 文件（${selectionLabel}）`;
+  importFileSize.textContent = formatFileSize(files.reduce((sum, file) => sum + file.size, 0));
   setValidation("正在读取并校验文件…", "neutral");
   importFeedback.textContent = "正在解析商品数据…";
-
   try {
-    if (!file.name.toLowerCase().endsWith(".json")) {
-      throw new Error("当前只支持 .json 文件");
-    }
-
-    const payload = JSON.parse(await file.text());
-    const records = getImportRecords(payload);
-    if (records.length === 0) {
-      throw new Error("文件中没有商品数据");
-    }
-
-    const validRecordCount = records.filter(isProductRecord).length;
-    if (validRecordCount !== records.length) {
-      throw new Error(`${records.length - validRecordCount} 条记录缺少商品名称`);
-    }
-
-    selectedImport = { file, payload, recordCount: records.length, valid: true };
+    const imports = await createImportEntries(files);
+    const recordCount = imports.reduce((sum, entry) => sum + entry.recordCount, 0);
+    const rankTypes = [...new Set(imports.map((entry) => entry.rankType))];
+    selectedImport = { imports, fileCount: files.length, recordCount, rankTypes, valid: true };
     importButton.disabled = false;
-    setValidation(`✓ JSON 格式有效 · ✓ 解析 ${records.length} 条商品 · ✓ 关键字段可用`, "success");
-    importFeedback.textContent = `已读取 ${records.length} 条商品数据，可以导入保存。`;
+    setValidation(`✓ 识别 ${imports.length} 个榜单 · ✓ 解析 ${recordCount} 条商品 · ✓ ${rankTypes.join("、")}`, "success");
+    importFeedback.textContent = `已读取 ${recordCount} 条商品数据，可以导入保存。`;
   } catch (error) {
     setValidation(`✕ ${error.message || "文件校验失败"}`, "error");
     importFeedback.textContent = "文件未导入，请修正后重新选择。";
   }
-});
+}
+
+async function createImportEntries(files) {
+  const parsedFiles = await Promise.all(files.map(async (file) => ({
+    file,
+    payload: JSON.parse(await file.text()),
+    directory: getDirectoryKey(file)
+  })));
+  const metadataByDirectory = new Map();
+  for (const item of parsedFiles.filter((item) => item.file.name.toLowerCase() === "metadata.json")) {
+    metadataByDirectory.set(item.directory, item.payload);
+  }
+  const productFiles = parsedFiles.filter((item) => item.file.name.toLowerCase() !== "metadata.json");
+  if (!productFiles.length) throw new Error("未找到 products.json 商品数据文件");
+
+  return productFiles.map((item) => {
+    const records = getImportRecords(item.payload);
+    const validRecordCount = records.filter(isProductRecord).length;
+    if (!records.length) throw new Error(`${item.file.name} 中没有商品数据`);
+    if (validRecordCount !== records.length) throw new Error(`${item.file.name} 有 ${records.length - validRecordCount} 条记录缺少商品名称`);
+    const metadata = metadataByDirectory.get(item.directory) ?? item.payload.metadata ?? {};
+    return {
+      products: item.payload,
+      metadata,
+      sourceFile: item.file.webkitRelativePath || item.file.name,
+      recordCount: records.length,
+      rankType: detectRankType(metadata.rank_type ?? item.payload.rank_type, item.file.webkitRelativePath || item.file.name)
+    };
+  });
+}
 
 importButton.addEventListener("click", async () => {
   if (!selectedImport.valid) {
     importFeedback.textContent = "请先选择并通过校验的 JSON 商品文件。";
     return;
   }
-
   importButton.disabled = true;
-  importFeedback.textContent = "正在导入并保存…";
-
+  importFeedback.textContent = "正在合并并保存到本地…";
   try {
     const response = await fetch("/api/products/import", {
-      body: JSON.stringify({
-        products: selectedImport.payload,
-        rank_type: selectedImport.payload?.rank_type ?? selectedImport.payload?.metadata?.rank_type,
-        sourceFile: selectedImport.file.name
-      }),
+      body: JSON.stringify({ imports: selectedImport.imports.map(({ recordCount, rankType, ...entry }) => entry) }),
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
     const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "导入失败");
-    }
-
+    if (!response.ok) throw new Error(result.error || "导入失败");
     renderProducts(result.products, "已保存数据");
-    setValidation(`✓ 导入完成 · 已保存 ${result.importedCount} 条商品 · 榜单类型：${result.rank_type || "总榜"}`, "success");
-    importFeedback.textContent = `导入成功：${result.importedCount} 条商品已保存到本地。`;
+    setValidation(`✓ 已导入 ${result.importedFileCount} 个榜单 · ${result.importedCount} 条记录 · 合并 ${result.mergedCount} 条重复商品`, "success");
+    importFeedback.textContent = `导入成功：当前本地共保存 ${result.products.length} 条商品。`;
   } catch (error) {
     importFeedback.textContent = `导入失败：${error.message || "请检查 JSON 文件格式。"}`;
   } finally {
@@ -191,6 +202,16 @@ function getImportRecords(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.products)) return payload.products;
   throw new Error("JSON 文件中未找到商品数据数组");
+}
+
+function getDirectoryKey(file) {
+  const path = file.webkitRelativePath || "";
+  return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+}
+
+function detectRankType(value, sourceFile = "") {
+  const candidate = `${value ?? ""} ${sourceFile}`;
+  return ["直播榜", "短视频榜", "商品卡", "达人榜", "新品榜", "总榜"].find((rankType) => candidate.includes(rankType)) ?? "总榜";
 }
 
 function isProductRecord(record) {

@@ -53,8 +53,12 @@
               </div>
               <div class="import-actions">
                 <label class="file-picker">
-                  选择 JSON
-                  <input id="import-file" type="file" accept="application/json,.json" />
+                  选择 JSON 文件
+                  <input id="import-file" type="file" accept="application/json,.json" multiple />
+                </label>
+                <label class="file-picker">
+                  选择六榜文件夹
+                  <input id="import-directory" type="file" accept="application/json,.json" multiple webkitdirectory />
                 </label>
                 <button id="import-button" type="button" disabled>导入并保存</button>
               </div>
@@ -63,7 +67,7 @@
               <strong id="import-file-name">尚未选择文件</strong>
               <span id="import-file-size"></span>
             </div>
-            <p class="import-validation neutral" id="import-validation" role="status">选择文件后将进行 JSON 格式和商品数据校验。</p>
+            <p class="import-validation neutral" id="import-validation" role="status">选择 JSON 文件或六榜数据文件夹后将进行校验。</p>
             <div class="toolbar-bottom">
               <label class="search-control">
                 <span aria-hidden="true">⌕</span>
@@ -89,6 +93,7 @@
                 <col class="col-rank" />
                 <col class="col-change" />
                 <col class="col-product" />
+                <col class="col-source" />
                 <col class="col-price" />
                 <col class="col-gmv" />
                 <col class="col-clicks" />
@@ -103,6 +108,7 @@
                   <th scope="col">排名</th>
                   <th scope="col">变化</th>
                   <th scope="col" class="text-left">商品</th>
+                  <th scope="col">榜单来源</th>
                   <th scope="col">价格</th>
                   <th scope="col">GMV</th>
                   <th scope="col">点击量</th>
